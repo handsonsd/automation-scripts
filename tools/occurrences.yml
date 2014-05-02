@@ -1,0 +1,19 @@
+username: youremail@yourorganization.org
+password: YourPassword
+token: YourToken
+schedule:
+  # North County's Food Bank - FIT Program
+  # 2014 Dates: January 22, February 26, March 26, April 23, May 21, June 25, July 23
+  - occurence: OC-000931
+    date: 2014-6-25
+  # Volunteer in the Gardens at North River Road
+  # 2nd Saturday
+  - occurence: OC-000932
+    date: 2014-6-14
+  #
+  #- occurence: OC-00
+  #  date: 2014-6-
+  #
+  #- occurence: OC-00
+  #  date: 2014-6-
+  #
