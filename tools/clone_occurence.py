@@ -36,28 +36,48 @@ def clone_occurrence(sf, oc_name, new_date, tz, dry_run=False):
     if not oc:
         print "Failed to retrieve Occurrence %s" % (qres['records'][0]['Id'])
         return
-    else:
-        print "Processing %s ... "%(oc_name)
 
+    # get Opportunity
+    VolunteerOpportunity = SFType('HOC__Volunteer_Opportunity__c', sf.session_id, sf.sf_instance)
+    op = VolunteerOpportunity.get(oc['HOC__Volunteer_Opportunity__c'])
+    if not op:
+        print "Failed to retrieve Volunteer Opportunity%s" % (oc['HOC__Volunteer_Opportunity__c'])
+        return
 
     # do date calculation
     old_start_datetime = parser.parse(oc['HOC__Start_Date_Time__c'])
     old_end_datetime = parser.parse(oc['HOC__End_Date_Time__c'])
-    delta = new_date - old_start_datetime.date()
+    # need to make sure we calculate delta date in the right timezone,
+    # otherwise it can mess up the calculation
+    delta = new_date - old_start_datetime.astimezone(tz).date()
 
     # this weird formula is to add delta while maintaining the correct timezone
     # first add delta, then remove timezone (to maintain the same hour)
     # then add back the timezone, so we can calculate utc timezone correctly afterward
-    new_start_datetime = tz.localize((old_start_datetime.astimezone(tz) + delta).replace(tzinfo=None)).astimezone(utc).isoformat()
-    new_end_datetime = tz.localize((old_end_datetime.astimezone(tz) + delta).replace(tzinfo=None)).astimezone(utc).isoformat()
+    new_start_datetime = tz.localize((old_start_datetime.astimezone(tz) + delta).replace(tzinfo=None)).astimezone(utc)
+    new_start_datetime_str = new_start_datetime.isoformat()
+    new_end_datetime = tz.localize((old_end_datetime.astimezone(tz) + delta).replace(tzinfo=None)).astimezone(utc)
+    new_end_datetime_str = new_end_datetime.isoformat()
+    new_start_tz = new_start_datetime.astimezone(tz)
 
+    print "========================================="
+    print "Occurrence Id: " + oc_name
+    print "Project Name: " + op['Name']
+    print "Volunteer Coordinator Name: " + oc['HOC__Volunteer_Coordinator_Name__c']
+    print "Volunteer Coordinator Email: " + oc['HOC__Volunteer_Coordinator_Email__c']
+    print "Days Time Needed: " + oc['HOC__Days_Times_Needed__c']
+    print "Clone to date (UTC): " + str(new_start_datetime)
 
     # double check the time, there should be no two occurence within the same date - to make this Idempotent
     check = sf.query("SELECT Id FROM HOC__Occurrence__c where HOC__Volunteer_Opportunity__c = '%s' and HOC__Start_Date_Time__c = %s" % (
-        oc['HOC__Volunteer_Opportunity__c'], new_start_datetime))
+        oc['HOC__Volunteer_Opportunity__c'], new_start_datetime_str))
     if check['totalSize'] > 0:
-        print "Skipping %s - duplicate record found .."%(oc_name)
+        print "Skipping - duplicate record found for %s, "%(new_start_tz.strftime('%A')) + str(new_start_tz)
+        print "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~"
         return
+    else:
+        print "Clone to date: %s, "%(new_start_tz.strftime('%A')) + str(new_start_tz)
+        print "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~"
 
 
     # process properties
@@ -87,7 +107,7 @@ def clone_occurrence(sf, oc_name, new_date, tz, dry_run=False):
         u'HOC__City__c': None,
         u'HOC__Country__c': None,
         #u'HOC__Days_Times_Needed__c': None,
-        u'HOC__End_Date_Time__c': lambda k,ooc,noc:new_end_datetime,
+        u'HOC__End_Date_Time__c': lambda k,ooc,noc:new_end_datetime_str,
         u'HOC__Google_Map_URL__c': None,
         u'HOC__HOC_Domain_Name__c': None,
         u'HOC__HOC_ID__c': None,
@@ -105,7 +125,7 @@ def clone_occurrence(sf, oc_name, new_date, tz, dry_run=False):
         u'HOC__Registration_Start_Date__c': None,
         u'HOC__Schedule_Type__c': None,
         u'HOC__Serial_Number__c': None,
-        u'HOC__Start_Date_Time__c': lambda k,ooc,noc:new_start_datetime,
+        u'HOC__Start_Date_Time__c': lambda k,ooc,noc:new_start_datetime_str,
         u'HOC__State_Province__c': None,
         #u'HOC__Status__c': None,
         u'HOC__Street__c': None,
@@ -157,13 +177,8 @@ def clone_occurrence(sf, oc_name, new_date, tz, dry_run=False):
         else:
             new_oc[k] = oc[k]
 
-    print "========================================="
-    print oc
-    print "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~"
-
     if dry_run:
         print("DRY RUN ..")
-        print new_oc
         print "========================================="
     else:
         print("CREATING OCCURRENCE ..")
