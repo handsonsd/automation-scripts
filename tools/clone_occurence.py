@@ -232,7 +232,7 @@ def main(argv=None):
     sf = Salesforce(instance=instance, session_id=session_id)
 
     for sched in config['schedule']:
-        new_date = datetime.strptime(sched['date'], '%Y-%m-%d').date()
+        new_date = datetime.strptime(str(sched['date']), '%Y-%m-%d').date()
         clone_occurrence(sf, sched['occurence'], new_date, mytz, dry_run)
 
     return 0
