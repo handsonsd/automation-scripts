@@ -2,6 +2,7 @@ import sys
 import os
 import argparse
 import yaml
+import json
 from pytz import timezone, utc
 from datetime import datetime
 from dateutil import parser, relativedelta
@@ -19,11 +20,12 @@ argp.add_argument('--occurrence', help='occurrence OCCURRENCE_NAME')
 argp.add_argument('--date', help='date OCCURRENCE_DATE(yyyy-mm-dd)')
 argp.add_argument('--timezone', help='timezone TIMEZONE(eg.US/Pacific)')
 argp.add_argument('--dry', help='dry run', action='store_true')
+argp.add_argument('--debug', help='debug', action='store_true')
 
 
 #sf = Salesforce(username='myemail@example.com', password='password', security_token='token')
 
-def clone_occurrence(sf, oc_name, new_date, tz, dry_run=False):
+def clone_occurrence(sf, oc_name, new_date, tz, dry_run=False, debug=False):
     # query for occurrence_name
     qres = sf.query("SELECT Id FROM HOC__Occurrence__c where Name = '%s'" % (oc_name))
     if ('records' not in qres) or (len(qres['records']) < 1) or ('Id' not in qres['records'][0]):
@@ -68,16 +70,12 @@ def clone_occurrence(sf, oc_name, new_date, tz, dry_run=False):
     print "Days Time Needed: " + oc['HOC__Days_Times_Needed__c']
     print "Clone to date (UTC): " + str(new_start_datetime)
 
-    # double check the time, there should be no two occurence within the same date - to make this Idempotent
-    check = sf.query("SELECT Id FROM HOC__Occurrence__c where HOC__Volunteer_Opportunity__c = '%s' and HOC__Start_Date_Time__c = %s" % (
-        oc['HOC__Volunteer_Opportunity__c'], new_start_datetime_str))
-    if check['totalSize'] > 0:
-        print "Skipping - duplicate record found for %s, "%(new_start_tz.strftime('%A')) + str(new_start_tz)
-        print "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~"
-        return
-    else:
-        print "Clone to date: %s, "%(new_start_tz.strftime('%A')) + str(new_start_tz)
-        print "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~"
+    if debug:
+        print "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
+        print "Original Data"
+        print "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
+        print json.dumps(oc, sort_keys=True, indent=4, separators=(',',':'))
+        print "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
 
 
     # process properties
@@ -164,6 +162,22 @@ def clone_occurrence(sf, oc_name, new_date, tz, dry_run=False):
         #u'HOC__Maximum_Waitlist__c': None,
         #u'HOC__Turn_off_teams__c': None,
         #u'HOC__Turn_off_waitlist__c'
+
+        # IMPACT
+        "Additional_Impact__c": None,
+        "Animals_Served_Cared_For__c": None,
+        "ConnectionReceivedId": None,
+        "ConnectionSentId": None,
+        "Craft_Items_Created_Constructed__c": None,
+        "Facilities_Maintained_Revitalized__c": None,
+        "For_Follow_Up__c": None,
+        "Gardens_Maintained_Created__c": None,
+        "Individuals_Received_Donations__c": None,
+        "Individuals_Served_Engaged__c": None,
+        "Mi_Trail_Beach_Park_Maintained_Created__c": None,
+        "Potential_Volunteer_Leaders__c": None,
+        "Pounds_of_Trash_Debris_Collected__c": None,
+        "Share_a_Story__c": None,
     }
 
     for k in oc.keys():
@@ -176,6 +190,24 @@ def clone_occurrence(sf, oc_name, new_date, tz, dry_run=False):
                 new_oc[k] = oc_modifier[k](k, oc, new_oc)
         else:
             new_oc[k] = oc[k]
+
+    if debug:
+        print "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
+        print "Modified Data"
+        print "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
+        print json.dumps(new_oc, sort_keys=True, indent=4, separators=(',',':'))
+        print "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
+
+    # double check the time, there should be no two occurence within the same date - to make this Idempotent
+    check = sf.query("SELECT Id FROM HOC__Occurrence__c where HOC__Volunteer_Opportunity__c = '%s' and HOC__Start_Date_Time__c = %s" % (
+        oc['HOC__Volunteer_Opportunity__c'], new_start_datetime_str))
+    if check['totalSize'] > 0:
+        print "Skipping - duplicate record found for %s, "%(new_start_tz.strftime('%A')) + str(new_start_tz)
+        print "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~"
+        return
+    else:
+        print "Clone to date: %s, "%(new_start_tz.strftime('%A')) + str(new_start_tz)
+        print "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~"
 
     if dry_run:
         print("DRY RUN ..")
@@ -211,6 +243,7 @@ def main(argv=None):
     token = args.token or config.get('token', 'UNKNOWN')
     mytz = timezone(args.timezone or config.get('timezone', 'US/Pacific'))
     dry_run = args.dry
+    debug = args.debug
 
     if args.occurrence is not None and args.date is not None:
         config['schedule'].append({
@@ -233,7 +266,7 @@ def main(argv=None):
 
     for sched in config['schedule']:
         new_date = datetime.strptime(str(sched['date']), '%Y-%m-%d').date()
-        clone_occurrence(sf, sched['occurence'], new_date, mytz, dry_run)
+        clone_occurrence(sf, sched['occurence'], new_date, mytz, dry_run, debug)
 
     return 0
 
