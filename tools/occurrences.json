@@ -1,0 +1,11 @@
+{
+  "username": "youremail@yourorganization.org",
+  "password": "YourPassword",
+  "token": "YourToken",
+  "schedule": [
+    {
+      "occurence": "OC-001100",
+      "date": "2015-07-13"
+    }
+  ]
+}
